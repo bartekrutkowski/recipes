@@ -1,0 +1,31 @@
+description: Run dbt build on a schedule and preserve dbt artifacts.
+schedule: "0 4 * * *"
+
+params:
+  - name: project_dir
+    default: /srv/dbt/project
+  - name: profiles_dir
+    default: /srv/dbt/profiles
+  - name: target
+    default: prod
+  - name: threads
+    type: integer
+    default: 4
+    minimum: 1
+    maximum: 32
+
+steps:
+  - id: dbt_build
+    action: dbt@v1
+    with:
+      projectDir: ${params.project_dir}
+      profilesDir: ${params.profiles_dir}
+      requirements:
+        - dbt-postgres==1.9.0
+      command: build
+      target: ${params.target}
+      threads: ${params.threads}
+      failFast: true
+      targetPath: ${context.paths.artifacts_dir}/dbt-target
+      logPath: ${context.paths.artifacts_dir}/dbt-logs
+      timeoutSeconds: 3600

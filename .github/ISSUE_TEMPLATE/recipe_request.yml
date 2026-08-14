@@ -1,0 +1,31 @@
+name: Request a recipe
+description: Suggest an operations workflow for the community catalog
+title: "recipe: "
+labels: ["recipe-request"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the job that should be automated, not the implementation.
+      placeholder: Back up a PostgreSQL database to S3 and alert when it fails.
+    validations:
+      required: true
+  - type: textarea
+    id: current-process
+    attributes:
+      label: Current command or runbook
+      description: Remove credentials, private hostnames, and other sensitive values.
+      render: shell
+  - type: textarea
+    id: prerequisites
+    attributes:
+      label: Required systems
+      placeholder: PostgreSQL, an S3-compatible bucket, and Slack.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: I removed credentials and private infrastructure details.
+          required: true

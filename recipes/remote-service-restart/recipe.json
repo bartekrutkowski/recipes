@@ -1,0 +1,11 @@
+{
+  "id": "remote-service-restart",
+  "title": "Restart a remote systemd service with approval",
+  "summary": "Require operator acknowledgement, restart a service over SSH, and verify that it becomes active.",
+  "category": "server-maintenance",
+  "tags": ["ssh", "systemd", "restart", "human-in-the-loop"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["SSH key authentication and known-host verification", "Permission to run systemctl for the selected service"]
+}

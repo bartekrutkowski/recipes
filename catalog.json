@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "recipes": [
+    {
+      "id": "dbt-scheduled-run",
+      "title": "Schedule a dbt build with artifacts",
+      "summary": "Run a pinned dbt adapter on a schedule and keep dbt target and log files as Dagu run artifacts.",
+      "category": "data-movement",
+      "tags": [
+        "dbt",
+        "postgresql",
+        "data",
+        "schedule"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "A dbt project and profiles directory available to the Dagu worker",
+        "Warehouse credentials supplied through the dbt profile environment"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Run dbt build on a schedule and preserve dbt artifacts.\nschedule: \"0 4 * * *\"\n\nparams:\n  - name: project_dir\n    default: /srv/dbt/project\n  - name: profiles_dir\n    default: /srv/dbt/profiles\n  - name: target\n    default: prod\n  - name: threads\n    type: integer\n    default: 4\n    minimum: 1\n    maximum: 32\n\nsteps:\n  - id: dbt_build\n    action: dbt@v1\n    with:\n      projectDir: ${params.project_dir}\n      profilesDir: ${params.profiles_dir}\n      requirements:\n        - dbt-postgres==1.9.0\n      command: build\n      target: ${params.target}\n      threads: ${params.threads}\n      failFast: true\n      targetPath: ${context.paths.artifacts_dir}/dbt-target\n      logPath: ${context.paths.artifacts_dir}/dbt-logs\n      timeoutSeconds: 3600\n",
+      "readme": "# Schedule a dbt build with artifacts\n\nRuns `dbt build` through the official `dbt@v1` Action and stores dbt target and log directories with the Dagu run.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer.\n- A dbt project, profiles directory, and warehouse credentials available to the worker.\n\n## Inputs and secrets\n\nConfigure `project_dir`, `profiles_dir`, `target`, and `threads`. Supply warehouse credentials through environment variables referenced by `profiles.yml`.\n\n## What it changes\n\nRuns the dbt models, tests, snapshots, and seeds selected by the project. Warehouse effects depend on the dbt project.\n\n## Verify\n\nReview the Dagu step result, `dbt-target/run_results.json`, and the dbt logs stored as artifacts.\n\n## Recovery\n\nUse the project's rollback or model-restoration procedure, correct the dbt failure, and rerun the workflow.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/dbt-scheduled-run"
+    },
+    {
+      "id": "directory-backup-rclone",
+      "title": "Back up a directory with rclone",
+      "summary": "Copy a local directory to any rclone remote without deleting files at the destination.",
+      "category": "backup-recovery",
+      "tags": [
+        "rclone",
+        "backup",
+        "filesystem",
+        "object-storage"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "An rclone remote configured for the Dagu user",
+        "Read access to the source directory"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Copy a local directory to an rclone remote without deleting destination files.\nschedule: \"0 3 * * *\"\n\nparams:\n  - name: source\n    default: /srv/data\n    description: Local directory to copy\n  - name: destination\n    default: backup:data\n    description: rclone destination\n\nsteps:\n  - id: copy\n    action: rclone@v1\n    with:\n      command: copy\n      source: ${params.source}\n      destination: ${params.destination}\n      checksum: true\n      fastList: true\n      transfers: 4\n      stats: 30s\n",
+      "readme": "# Back up a directory with rclone\n\nUses the official `rclone@v1` Action to copy files to a configured remote. The `copy` operation updates and adds files but does not mirror deletions.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer.\n- An rclone configuration available to the Dagu user.\n\n## Inputs and secrets\n\nSet `source` to the local directory and `destination` to an rclone path such as `backup:data`. Credentials remain in the rclone configuration.\n\n## What it changes\n\nCreates or updates destination objects. It does not delete destination files that no longer exist locally.\n\n## Verify\n\nRun `rclone check <source> <destination>` or inspect the destination after the first run.\n\n## Recovery\n\nRestore files with an rclone copy in the opposite direction. Remove unwanted destination files manually after review.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/directory-backup-rclone"
+    },
+    {
+      "id": "disk-space-alert",
+      "title": "Alert when disk usage is high",
+      "summary": "Check filesystem utilization on a schedule and notify Slack before a disk fills up.",
+      "category": "monitoring-alerting",
+      "tags": [
+        "disk",
+        "filesystem",
+        "slack",
+        "monitoring"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "prerequisites": [
+        "df and awk",
+        "A Slack incoming webhook URL exposed through an environment-backed Dagu secret"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Notify Slack when a filesystem reaches its utilization threshold.\nschedule: \"*/15 * * * *\"\n\nparams:\n  - name: path\n    default: /\n  - name: threshold_percent\n    type: integer\n    default: 85\n    minimum: 1\n    maximum: 100\n\nsecrets:\n  - name: SLACK_WEBHOOK_URL\n    provider: env\n    key: SLACK_WEBHOOK_URL\n\nhandler_on:\n  failure:\n    action: http.request\n    with:\n      method: POST\n      url: ${env.SLACK_WEBHOOK_URL}\n      headers:\n        Content-Type: application/json\n      body: '{\"text\":\"Disk usage for ${params.path} reached the ${params.threshold_percent}% alert threshold on the Dagu host.\"}'\n\nsteps:\n  - id: check_usage\n    run: |\n      #!/bin/sh\n      set -eu\n      usage=\"$(df -P \"${params.path}\" | awk 'NR == 2 { gsub(/%/, \"\", $5); print $5 }')\"\n      printf 'Disk usage for %s: %s%%\\n' \"${params.path}\" \"$usage\"\n      test \"$usage\" -lt \"${params.threshold_percent}\"\n",
+      "readme": "# Alert when disk usage is high\n\nChecks a filesystem every fifteen minutes and fails when utilization reaches the configured threshold. The failure handler sends a Slack message.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer with `df` and `awk`.\n- A Slack incoming webhook.\n\n## Inputs and secrets\n\nSet `SLACK_WEBHOOK_URL` in the Dagu process environment. Configure `path` and `threshold_percent`.\n\n## What it changes\n\nReads filesystem statistics and may send one Slack message. It never deletes files.\n\n## Verify\n\nRun once with the normal threshold, then temporarily lower it below current usage to test the notification.\n\n## Recovery\n\nFree or expand storage, restore the threshold, and rerun the check.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/disk-space-alert"
+    },
+    {
+      "id": "docker-compose-deploy",
+      "title": "Deploy Docker Compose with approval",
+      "summary": "Require operator acknowledgement, pull pinned Compose images, start the stack, and record its status.",
+      "category": "deployment",
+      "tags": [
+        "docker",
+        "compose",
+        "deployment",
+        "human-in-the-loop"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "Docker Engine with Compose v2",
+        "A reviewed Compose project with pinned image versions"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Pull and deploy a Docker Compose project after explicit acknowledgement.\n\nparams:\n  - name: project_dir\n    default: /srv/app\n  - name: compose_file\n    default: compose.yaml\n\nsteps:\n  - id: confirm\n    action: human.task\n    with:\n      prompt: Acknowledge deployment of the Compose project in ${params.project_dir}\n\n  - id: pull\n    depends: [confirm]\n    working_dir: ${params.project_dir}\n    run: docker compose -f '${params.compose_file}' pull\n    timeout_sec: 900\n\n  - id: deploy\n    depends: [pull]\n    working_dir: ${params.project_dir}\n    run: docker compose -f '${params.compose_file}' up -d --remove-orphans\n    timeout_sec: 900\n\n  - id: status\n    depends: [deploy]\n    working_dir: ${params.project_dir}\n    run: docker compose -f '${params.compose_file}' ps\n    stdout:\n      artifact: compose-status.txt\n",
+      "readme": "# Deploy Docker Compose with approval\n\nPulls images and starts a Compose project after a human task is completed. The final Compose status is stored as a run artifact.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer and Docker Compose v2.\n- A reviewed Compose project whose images use immutable versions or digests.\n\n## Inputs and secrets\n\nConfigure `project_dir` and `compose_file`. Keep registry credentials in Docker's credential store rather than the workflow.\n\n## What it changes\n\nPulls images, creates or replaces containers, and removes orphaned containers after acknowledgement.\n\n## Verify\n\nReview `compose-status.txt`, container health checks, application logs, and the service endpoint.\n\n## Recovery\n\nRestore the prior image tags or digest in the Compose file and rerun the workflow after acknowledgement.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/docker-compose-deploy"
+    },
+    {
+      "id": "fleet-patch",
+      "title": "Patch a Linux server fleet in batches",
+      "summary": "Require operator acknowledgement and run a configurable patch command across SSH hosts with bounded concurrency.",
+      "category": "server-maintenance",
+      "tags": [
+        "ssh",
+        "patching",
+        "linux",
+        "parallel"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "SSH key authentication and known-host verification",
+        "Passwordless sudo for the selected patch command",
+        "Tested rollback or snapshot procedures"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Apply an approved patch command to a newline-separated list of hosts.\n\nparams:\n  - name: hosts\n    default: |\n      server1.example.com\n      server2.example.com\n  - name: user\n    default: deploy\n  - name: key\n    default: ~/.ssh/id_ed25519\n  - name: command\n    default: sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y\n\nsteps:\n  - id: confirm\n    action: human.task\n    with:\n      prompt: Review the host list and acknowledge the fleet patch operation\n\n  - id: patch_hosts\n    depends: [confirm]\n    action: dag.run\n    parallel:\n      items: ${params.hosts}\n      max_concurrent: 2\n    with:\n      dag: patch-host\n      params:\n        host: ${ITEM}\n        user: ${params.user}\n        key: ${params.key}\n        command: ${params.command}\n---\nname: patch-host\n\nparams:\n  - name: host\n    required: true\n  - name: user\n    required: true\n  - name: key\n    required: true\n  - name: command\n    required: true\n\nsteps:\n  - id: patch\n    action: ssh.run\n    with:\n      host: ${params.host}\n      user: ${params.user}\n      key: ${params.key}\n      shell: /bin/sh -e\n      command: ${params.command}\n",
+      "readme": "# Patch a Linux server fleet in batches\n\nRequires operator acknowledgement, then fans out a patch command to newline-separated SSH hosts with at most two concurrent child runs.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer.\n- Key-based SSH access, verified host keys, passwordless sudo, and tested recovery procedures.\n\n## Inputs and secrets\n\nReview `hosts`, `user`, `key`, and `command` before every production use. The default command targets Debian-family systems.\n\n## What it changes\n\nRuns the configured package-manager command on every listed host after acknowledgement. Package upgrades can restart services or require a reboot.\n\n## Verify\n\nInspect each child run, check package state and service health, and confirm whether any host requires a reboot.\n\n## Recovery\n\nRestore the affected host from its snapshot or package rollback procedure. Remove unhealthy hosts from the list before retrying.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/fleet-patch"
+    },
+    {
+      "id": "http-health-slack",
+      "title": "Monitor an HTTP endpoint and alert Slack",
+      "summary": "Check an HTTP endpoint on a schedule with retries and send a Slack webhook when the check fails.",
+      "category": "monitoring-alerting",
+      "tags": [
+        "http",
+        "health-check",
+        "slack",
+        "monitoring"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "A reachable HTTP endpoint",
+        "A Slack incoming webhook URL exposed through an environment-backed Dagu secret"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Check an HTTP endpoint and notify Slack when all retries fail.\nschedule: \"*/5 * * * *\"\n\nparams:\n  - name: url\n    default: https://example.com/health\n\nsecrets:\n  - name: SLACK_WEBHOOK_URL\n    provider: env\n    key: SLACK_WEBHOOK_URL\n\nhandler_on:\n  failure:\n    action: http.request\n    with:\n      method: POST\n      url: ${env.SLACK_WEBHOOK_URL}\n      headers:\n        Content-Type: application/json\n      body: '{\"text\":\"Dagu health check failed for ${params.url}. Run: ${context.run.id}\"}'\n      timeout: 10\n\nsteps:\n  - id: health_check\n    action: http.request\n    with:\n      method: GET\n      url: ${params.url}\n      timeout: 10\n      silent: true\n    retry_policy:\n      limit: 3\n      interval_sec: 10\n",
+      "readme": "# Monitor an HTTP endpoint and alert Slack\n\nChecks an endpoint every five minutes. Dagu retries transient failures and sends one Slack webhook if the run still fails.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer.\n- A Slack incoming webhook and network access to both endpoints.\n\n## Inputs and secrets\n\nSet `SLACK_WEBHOOK_URL` in the Dagu process environment. Override `url` and `timeout_seconds` for the monitored service.\n\n## What it changes\n\nPerforms HTTP GET requests and, on failure, sends one message to Slack. It does not modify the monitored service.\n\n## Verify\n\nRun once against a healthy endpoint, then temporarily use a known failing URL and confirm the Slack notification.\n\n## Recovery\n\nCorrect the endpoint or network issue and rerun the workflow. Remove the Slack webhook from the environment to disable notifications.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/http-health-slack"
+    },
+    {
+      "id": "kubernetes-scheduled-job",
+      "title": "Run a scheduled Kubernetes Job",
+      "summary": "Replace a simple Kubernetes CronJob with a Dagu schedule and a version-pinned Job image.",
+      "category": "deployment",
+      "tags": [
+        "kubernetes",
+        "job",
+        "schedule",
+        "cron"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "Kubernetes credentials available to Dagu",
+        "A version-pinned container image and suitable service account"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Run a version-pinned container as a Kubernetes Job on a Dagu schedule.\nschedule: \"0 * * * *\"\n\nparams:\n  - name: namespace\n    default: batch\n  - name: image\n    default: alpine:3.22.1\n  - name: command\n    default: echo 'replace this command with the batch job'\n\nsteps:\n  - id: run_job\n    action: kubernetes.run\n    with:\n      namespace: ${params.namespace}\n      image: ${params.image}\n      image_pull_policy: IfNotPresent\n      command: ${params.command}\n      cleanup_policy: delete\n    timeout_sec: 1800\n",
+      "readme": "# Run a scheduled Kubernetes Job\n\nUses Dagu's scheduler and Kubernetes executor to create a Job, stream its logs, wait for completion, and clean it up.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer with access to the target cluster.\n- A service account allowed to create, inspect, and delete Jobs and Pods.\n\n## Inputs and secrets\n\nSet `namespace`, a version-pinned `image`, and one `command`. Configure registry and application secrets through Kubernetes rather than embedding them in YAML.\n\n## What it changes\n\nCreates a Kubernetes Job and Pod on each scheduled run, then deletes them after completion.\n\n## Verify\n\nReview the Dagu run logs and confirm the expected external result of the batch command.\n\n## Recovery\n\nSuspend the Dagu workflow to stop future runs. Correct the image or command and rerun; completed Jobs are removed automatically.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/kubernetes-scheduled-job"
+    },
+    {
+      "id": "mysql-backup-s3",
+      "title": "Back up MySQL to S3",
+      "summary": "Create a compressed, transaction-consistent MySQL dump and upload it to an S3-compatible bucket.",
+      "category": "backup-recovery",
+      "tags": [
+        "mysql",
+        "s3",
+        "backup",
+        "cron"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "prerequisites": [
+        "mysqldump and gzip",
+        "An S3-compatible bucket",
+        "MySQL and S3 credentials exposed through environment-backed Dagu secrets"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Create a compressed MySQL dump and upload it to S3.\nschedule: \"30 2 * * *\"\n\nparams:\n  - name: host\n    default: 127.0.0.1\n  - name: port\n    type: integer\n    default: 3306\n    minimum: 1\n    maximum: 65535\n  - name: user\n    default: backup\n  - name: database\n    required: true\n  - name: bucket\n    required: true\n  - name: prefix\n    default: mysql\n\nsecrets:\n  - name: MYSQL_PASSWORD\n    provider: env\n    key: MYSQL_PASSWORD\n  - name: AWS_ACCESS_KEY_ID\n    provider: env\n    key: AWS_ACCESS_KEY_ID\n  - name: AWS_SECRET_ACCESS_KEY\n    provider: env\n    key: AWS_SECRET_ACCESS_KEY\n\ndefaults:\n  retry_policy:\n    limit: 2\n    interval_sec: 30\n\nsteps:\n  - id: create_dump\n    run: |\n      #!/bin/sh\n      set -eu\n      timestamp=\"$(date -u +%Y%m%dT%H%M%SZ)\"\n      file=\"$DAG_RUN_WORK_DIR/${params.database}-${timestamp}.sql.gz\"\n      key=\"${params.prefix}/${params.database}-${timestamp}.sql.gz\"\n      MYSQL_PWD=\"$MYSQL_PASSWORD\" mysqldump \\\n        --single-transaction \\\n        --host=\"${params.host}\" \\\n        --port=\"${params.port}\" \\\n        --user=\"${params.user}\" \\\n        \"${params.database}\" | gzip > \"$file\"\n      printf 'file=%s\\nkey=%s\\n' \"$file\" \"$key\" >> \"$DAGU_OUTPUT_FILE\"\n    outputs:\n      - name: file\n      - name: key\n\n  - id: upload\n    depends: [create_dump]\n    action: s3.upload\n    with:\n      bucket: ${params.bucket}\n      key: ${steps.create_dump.outputs.key}\n      source: ${steps.create_dump.outputs.file}\n      content_type: application/gzip\n",
+      "readme": "# Back up MySQL to S3\n\nCreates a compressed `mysqldump` with a consistent transactional snapshot and uploads it to object storage.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer, `mysqldump`, and `gzip`.\n- An S3-compatible bucket and a MySQL user with the required read privileges.\n\n## Inputs and secrets\n\nSet `MYSQL_PASSWORD`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` in the Dagu process environment. Provide `database` and `bucket`; review the connection parameters.\n\n## What it changes\n\nWrites a compressed dump in the run work directory and uploads one new object. It does not delete backups or modify MySQL data.\n\n## Verify\n\nDownload a recent object, run `gzip -t`, and test a restore into a disposable database.\n\n## Recovery\n\nDecompress the selected object and restore it with the `mysql` client. Delete unwanted objects only after confirming retention requirements.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/mysql-backup-s3"
+    },
+    {
+      "id": "postgres-backup-s3",
+      "title": "Back up PostgreSQL to S3",
+      "summary": "Create a timestamped PostgreSQL dump and upload it to an S3-compatible bucket every night.",
+      "category": "backup-recovery",
+      "tags": [
+        "postgresql",
+        "s3",
+        "backup",
+        "cron"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "prerequisites": [
+        "pg_dump",
+        "An S3-compatible bucket",
+        "Database and S3 credentials exposed through environment-backed Dagu secrets"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Create a PostgreSQL custom-format dump and upload it to S3.\nschedule: \"0 2 * * *\"\n\nparams:\n  - name: database_name\n    default: app\n    description: Safe name used in the backup filename\n  - name: bucket\n    required: true\n    description: Destination S3 bucket\n  - name: prefix\n    default: postgres\n    description: Object key prefix\n\nsecrets:\n  - name: DATABASE_URL\n    provider: env\n    key: DATABASE_URL\n  - name: AWS_ACCESS_KEY_ID\n    provider: env\n    key: AWS_ACCESS_KEY_ID\n  - name: AWS_SECRET_ACCESS_KEY\n    provider: env\n    key: AWS_SECRET_ACCESS_KEY\n\ndefaults:\n  retry_policy:\n    limit: 2\n    interval_sec: 30\n\nsteps:\n  - id: create_dump\n    run: |\n      #!/bin/sh\n      set -eu\n      timestamp=\"$(date -u +%Y%m%dT%H%M%SZ)\"\n      file=\"$DAG_RUN_WORK_DIR/${params.database_name}-${timestamp}.dump\"\n      key=\"${params.prefix}/${params.database_name}-${timestamp}.dump\"\n      pg_dump --format=custom --file=\"$file\" \"$DATABASE_URL\"\n      printf 'file=%s\\nkey=%s\\n' \"$file\" \"$key\" >> \"$DAGU_OUTPUT_FILE\"\n    outputs:\n      - name: file\n      - name: key\n\n  - id: upload\n    depends: [create_dump]\n    action: s3.upload\n    with:\n      bucket: ${params.bucket}\n      key: ${steps.create_dump.outputs.key}\n      source: ${steps.create_dump.outputs.file}\n      content_type: application/octet-stream\n",
+      "readme": "# Back up PostgreSQL to S3\n\nCreates a custom-format `pg_dump` and uploads it to an S3-compatible bucket. Configure retention with the bucket lifecycle policy so the workflow never deletes backups itself.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer and `pg_dump` on the Dagu host.\n- An S3-compatible bucket.\n\n## Inputs and secrets\n\nSet `DATABASE_URL`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` in the Dagu process environment. Provide `bucket`; optionally override `database_name` and `prefix`.\n\n## What it changes\n\nWrites a temporary dump in the run work directory and uploads one new object. It does not delete local or remote backups.\n\n## Verify\n\nConfirm that the uploaded object exists and periodically test a restore with `pg_restore --list` or a disposable database.\n\n## Recovery\n\nDownload the selected object and restore it with `pg_restore`. Remove failed or unwanted objects through the storage provider after confirming they are not needed.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/postgres-backup-s3"
+    },
+    {
+      "id": "remote-service-restart",
+      "title": "Restart a remote systemd service with approval",
+      "summary": "Require operator acknowledgement, restart a service over SSH, and verify that it becomes active.",
+      "category": "server-maintenance",
+      "tags": [
+        "ssh",
+        "systemd",
+        "restart",
+        "human-in-the-loop"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "SSH key authentication and known-host verification",
+        "Permission to run systemctl for the selected service"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Restart a remote systemd service after explicit operator acknowledgement.\n\nparams:\n  - name: host\n    default: server.example.com\n  - name: user\n    default: deploy\n  - name: service\n    default: app.service\n  - name: key\n    default: ~/.ssh/id_ed25519\n\nsteps:\n  - id: confirm\n    action: human.task\n    with:\n      prompt: Acknowledge the restart of ${params.service} on ${params.host}\n\n  - id: restart\n    depends: [confirm]\n    action: ssh.run\n    with:\n      host: ${params.host}\n      user: ${params.user}\n      key: ${params.key}\n      command: sudo systemctl restart '${params.service}'\n\n  - id: verify\n    depends: [restart]\n    action: ssh.run\n    with:\n      host: ${params.host}\n      user: ${params.user}\n      key: ${params.key}\n      command: systemctl is-active '${params.service}'\n    retry_policy:\n      limit: 5\n      interval_sec: 5\n",
+      "readme": "# Restart a remote systemd service with approval\n\nPauses for operator acknowledgement, restarts one systemd service over SSH, and retries the status check until the service is active or the run fails.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer.\n- Key-based SSH access with host-key verification and permission to run `systemctl`.\n\n## Inputs and secrets\n\nConfigure `host`, `user`, `service`, and the SSH `key` path. No password is stored in the workflow.\n\n## What it changes\n\nRestarts the selected remote service only after a human task is completed.\n\n## Verify\n\nThe final step runs `systemctl is-active`. Also verify the service health endpoint and recent journal entries.\n\n## Recovery\n\nInspect `journalctl -u <service>`, restore the prior service configuration or release, and restart again after approval.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/remote-service-restart"
+    },
+    {
+      "id": "sftp-to-s3",
+      "title": "Transfer an SFTP file to S3",
+      "summary": "Download a file over SFTP into the isolated run directory and upload it to an S3-compatible bucket.",
+      "category": "data-movement",
+      "tags": [
+        "sftp",
+        "s3",
+        "transfer",
+        "ingestion"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "prerequisites": [
+        "SSH key authentication and known-host verification",
+        "An S3-compatible bucket",
+        "S3 credentials exposed through environment-backed Dagu secrets"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Download one SFTP file and upload it to S3.\nschedule: \"0 * * * *\"\n\nparams:\n  - name: host\n    default: files.example.com\n  - name: user\n    default: ingest\n  - name: key\n    default: ~/.ssh/id_ed25519\n  - name: remote_file\n    default: /exports/latest.csv\n  - name: bucket\n    required: true\n  - name: object_key\n    default: incoming/latest.csv\n\nsecrets:\n  - name: AWS_ACCESS_KEY_ID\n    provider: env\n    key: AWS_ACCESS_KEY_ID\n  - name: AWS_SECRET_ACCESS_KEY\n    provider: env\n    key: AWS_SECRET_ACCESS_KEY\n\nsteps:\n  - id: download\n    action: sftp.download\n    with:\n      host: ${params.host}\n      user: ${params.user}\n      key: ${params.key}\n      source: ${params.remote_file}\n      destination: ${context.paths.work_dir}/incoming.dat\n\n  - id: upload\n    depends: [download]\n    action: s3.upload\n    with:\n      bucket: ${params.bucket}\n      key: ${params.object_key}\n      source: ${context.paths.work_dir}/incoming.dat\n",
+      "readme": "# Transfer an SFTP file to S3\n\nDownloads one remote file into the isolated run directory, then uploads it to object storage.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer.\n- Key-based SFTP access with host-key verification and an S3-compatible bucket.\n\n## Inputs and secrets\n\nConfigure the SFTP connection, `remote_file`, `bucket`, and `object_key`. Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the Dagu process environment.\n\n## What it changes\n\nReads the SFTP file, writes a temporary local copy, and creates or replaces the selected S3 object. It does not delete the SFTP source.\n\n## Verify\n\nCompare file size or checksum between the SFTP source and the uploaded object before downstream processing.\n\n## Recovery\n\nCorrect credentials or paths and rerun. Restore an overwritten object from bucket versioning when enabled.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/sftp-to-s3"
+    },
+    {
+      "id": "tls-expiry-alert",
+      "title": "Alert before a TLS certificate expires",
+      "summary": "Check a remote TLS certificate daily and notify Slack when its remaining lifetime falls below a threshold.",
+      "category": "monitoring-alerting",
+      "tags": [
+        "tls",
+        "certificate",
+        "slack",
+        "monitoring"
+      ],
+      "author": "dagucloud",
+      "minDaguVersion": "2.13.0",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "prerequisites": [
+        "openssl",
+        "Network access to the TLS endpoint",
+        "A Slack incoming webhook URL exposed through an environment-backed Dagu secret"
+      ],
+      "validatedWith": "2.13.0",
+      "workflow": "description: Fail and notify Slack when a TLS certificate expires too soon.\nschedule: \"0 8 * * *\"\n\nparams:\n  - name: host\n    default: example.com\n  - name: port\n    type: integer\n    default: 443\n    minimum: 1\n    maximum: 65535\n  - name: minimum_days\n    type: integer\n    default: 21\n    minimum: 1\n    maximum: 365\n\nsecrets:\n  - name: SLACK_WEBHOOK_URL\n    provider: env\n    key: SLACK_WEBHOOK_URL\n\nhandler_on:\n  failure:\n    action: http.request\n    with:\n      method: POST\n      url: ${env.SLACK_WEBHOOK_URL}\n      headers:\n        Content-Type: application/json\n      body: '{\"text\":\"TLS certificate check failed for ${params.host}:${params.port}; fewer than ${params.minimum_days} days may remain.\"}'\n\nsteps:\n  - id: check_certificate\n    run: |\n      #!/bin/sh\n      set -eu\n      seconds=\"$(( ${params.minimum_days} * 86400 ))\"\n      openssl s_client \\\n        -connect \"${params.host}:${params.port}\" \\\n        -servername \"${params.host}\" \\\n        </dev/null 2>/dev/null \\\n        | openssl x509 -checkend \"$seconds\" -noout\n    retry_policy:\n      limit: 2\n      interval_sec: 30\n",
+      "readme": "# Alert before a TLS certificate expires\n\nUses `openssl` to verify that a remote certificate remains valid for the configured number of days. A failed check triggers a Slack webhook.\n\n## Prerequisites\n\n- Dagu 2.13.0 or newer and `openssl`.\n- A Slack incoming webhook.\n\n## Inputs and secrets\n\nSet `SLACK_WEBHOOK_URL` in the Dagu process environment. Configure `host`, `port`, and `minimum_days`.\n\n## What it changes\n\nOpens a TLS connection and may send one Slack message. It does not alter the certificate or endpoint.\n\n## Verify\n\nRun against the production hostname, then raise `minimum_days` temporarily to confirm that the alert path works.\n\n## Recovery\n\nRenew or replace the certificate, verify the served certificate chain, and rerun the workflow.\n",
+      "sourceUrl": "https://github.com/dagucloud/recipes/tree/main/recipes/tls-expiry-alert"
+    }
+  ]
+}

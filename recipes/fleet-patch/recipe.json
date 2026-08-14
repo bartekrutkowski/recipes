@@ -1,0 +1,11 @@
+{
+  "id": "fleet-patch",
+  "title": "Patch a Linux server fleet in batches",
+  "summary": "Require operator acknowledgement and run a configurable patch command across SSH hosts with bounded concurrency.",
+  "category": "server-maintenance",
+  "tags": ["ssh", "patching", "linux", "parallel"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["SSH key authentication and known-host verification", "Passwordless sudo for the selected patch command", "Tested rollback or snapshot procedures"]
+}

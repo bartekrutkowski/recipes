@@ -1,0 +1,32 @@
+description: Pull and deploy a Docker Compose project after explicit acknowledgement.
+
+params:
+  - name: project_dir
+    default: /srv/app
+  - name: compose_file
+    default: compose.yaml
+
+steps:
+  - id: confirm
+    action: human.task
+    with:
+      prompt: Acknowledge deployment of the Compose project in ${params.project_dir}
+
+  - id: pull
+    depends: [confirm]
+    working_dir: ${params.project_dir}
+    run: docker compose -f '${params.compose_file}' pull
+    timeout_sec: 900
+
+  - id: deploy
+    depends: [pull]
+    working_dir: ${params.project_dir}
+    run: docker compose -f '${params.compose_file}' up -d --remove-orphans
+    timeout_sec: 900
+
+  - id: status
+    depends: [deploy]
+    working_dir: ${params.project_dir}
+    run: docker compose -f '${params.compose_file}' ps
+    stdout:
+      artifact: compose-status.txt

@@ -1,0 +1,11 @@
+{
+  "id": "kubernetes-scheduled-job",
+  "title": "Run a scheduled Kubernetes Job",
+  "summary": "Replace a simple Kubernetes CronJob with a Dagu schedule and a version-pinned Job image.",
+  "category": "deployment",
+  "tags": ["kubernetes", "job", "schedule", "cron"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["Kubernetes credentials available to Dagu", "A version-pinned container image and suitable service account"]
+}

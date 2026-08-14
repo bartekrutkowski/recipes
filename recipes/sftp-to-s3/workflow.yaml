@@ -1,0 +1,42 @@
+description: Download one SFTP file and upload it to S3.
+schedule: "0 * * * *"
+
+params:
+  - name: host
+    default: files.example.com
+  - name: user
+    default: ingest
+  - name: key
+    default: ~/.ssh/id_ed25519
+  - name: remote_file
+    default: /exports/latest.csv
+  - name: bucket
+    required: true
+  - name: object_key
+    default: incoming/latest.csv
+
+secrets:
+  - name: AWS_ACCESS_KEY_ID
+    provider: env
+    key: AWS_ACCESS_KEY_ID
+  - name: AWS_SECRET_ACCESS_KEY
+    provider: env
+    key: AWS_SECRET_ACCESS_KEY
+
+steps:
+  - id: download
+    action: sftp.download
+    with:
+      host: ${params.host}
+      user: ${params.user}
+      key: ${params.key}
+      source: ${params.remote_file}
+      destination: ${context.paths.work_dir}/incoming.dat
+
+  - id: upload
+    depends: [download]
+    action: s3.upload
+    with:
+      bucket: ${params.bucket}
+      key: ${params.object_key}
+      source: ${context.paths.work_dir}/incoming.dat

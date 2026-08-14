@@ -1,0 +1,34 @@
+description: Check an HTTP endpoint and notify Slack when all retries fail.
+schedule: "*/5 * * * *"
+
+params:
+  - name: url
+    default: https://example.com/health
+
+secrets:
+  - name: SLACK_WEBHOOK_URL
+    provider: env
+    key: SLACK_WEBHOOK_URL
+
+handler_on:
+  failure:
+    action: http.request
+    with:
+      method: POST
+      url: ${env.SLACK_WEBHOOK_URL}
+      headers:
+        Content-Type: application/json
+      body: '{"text":"Dagu health check failed for ${params.url}. Run: ${context.run.id}"}'
+      timeout: 10
+
+steps:
+  - id: health_check
+    action: http.request
+    with:
+      method: GET
+      url: ${params.url}
+      timeout: 10
+      silent: true
+    retry_policy:
+      limit: 3
+      interval_sec: 10

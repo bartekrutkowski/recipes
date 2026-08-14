@@ -1,0 +1,38 @@
+description: Restart a remote systemd service after explicit operator acknowledgement.
+
+params:
+  - name: host
+    default: server.example.com
+  - name: user
+    default: deploy
+  - name: service
+    default: app.service
+  - name: key
+    default: ~/.ssh/id_ed25519
+
+steps:
+  - id: confirm
+    action: human.task
+    with:
+      prompt: Acknowledge the restart of ${params.service} on ${params.host}
+
+  - id: restart
+    depends: [confirm]
+    action: ssh.run
+    with:
+      host: ${params.host}
+      user: ${params.user}
+      key: ${params.key}
+      command: sudo systemctl restart '${params.service}'
+
+  - id: verify
+    depends: [restart]
+    action: ssh.run
+    with:
+      host: ${params.host}
+      user: ${params.user}
+      key: ${params.key}
+      command: systemctl is-active '${params.service}'
+    retry_policy:
+      limit: 5
+      interval_sec: 5

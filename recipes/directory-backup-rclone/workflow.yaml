@@ -1,0 +1,22 @@
+description: Copy a local directory to an rclone remote without deleting destination files.
+schedule: "0 3 * * *"
+
+params:
+  - name: source
+    default: /srv/data
+    description: Local directory to copy
+  - name: destination
+    default: backup:data
+    description: rclone destination
+
+steps:
+  - id: copy
+    action: rclone@v1
+    with:
+      command: copy
+      source: ${params.source}
+      destination: ${params.destination}
+      checksum: true
+      fastList: true
+      transfers: 4
+      stats: 30s

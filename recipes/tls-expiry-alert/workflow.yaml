@@ -1,0 +1,46 @@
+description: Fail and notify Slack when a TLS certificate expires too soon.
+schedule: "0 8 * * *"
+
+params:
+  - name: host
+    default: example.com
+  - name: port
+    type: integer
+    default: 443
+    minimum: 1
+    maximum: 65535
+  - name: minimum_days
+    type: integer
+    default: 21
+    minimum: 1
+    maximum: 365
+
+secrets:
+  - name: SLACK_WEBHOOK_URL
+    provider: env
+    key: SLACK_WEBHOOK_URL
+
+handler_on:
+  failure:
+    action: http.request
+    with:
+      method: POST
+      url: ${env.SLACK_WEBHOOK_URL}
+      headers:
+        Content-Type: application/json
+      body: '{"text":"TLS certificate check failed for ${params.host}:${params.port}; fewer than ${params.minimum_days} days may remain."}'
+
+steps:
+  - id: check_certificate
+    run: |
+      #!/bin/sh
+      set -eu
+      seconds="$(( ${params.minimum_days} * 86400 ))"
+      openssl s_client \
+        -connect "${params.host}:${params.port}" \
+        -servername "${params.host}" \
+        </dev/null 2>/dev/null \
+        | openssl x509 -checkend "$seconds" -noout
+    retry_policy:
+      limit: 2
+      interval_sec: 30

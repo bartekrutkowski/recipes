@@ -1,0 +1,11 @@
+{
+  "id": "sftp-to-s3",
+  "title": "Transfer an SFTP file to S3",
+  "summary": "Download a file over SFTP into the isolated run directory and upload it to an S3-compatible bucket.",
+  "category": "data-movement",
+  "tags": ["sftp", "s3", "transfer", "ingestion"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["SSH key authentication and known-host verification", "An S3-compatible bucket", "S3 credentials exposed through environment-backed Dagu secrets"]
+}

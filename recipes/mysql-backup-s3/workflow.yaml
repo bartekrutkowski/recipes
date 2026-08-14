@@ -1,0 +1,63 @@
+description: Create a compressed MySQL dump and upload it to S3.
+schedule: "30 2 * * *"
+
+params:
+  - name: host
+    default: 127.0.0.1
+  - name: port
+    type: integer
+    default: 3306
+    minimum: 1
+    maximum: 65535
+  - name: user
+    default: backup
+  - name: database
+    required: true
+  - name: bucket
+    required: true
+  - name: prefix
+    default: mysql
+
+secrets:
+  - name: MYSQL_PASSWORD
+    provider: env
+    key: MYSQL_PASSWORD
+  - name: AWS_ACCESS_KEY_ID
+    provider: env
+    key: AWS_ACCESS_KEY_ID
+  - name: AWS_SECRET_ACCESS_KEY
+    provider: env
+    key: AWS_SECRET_ACCESS_KEY
+
+defaults:
+  retry_policy:
+    limit: 2
+    interval_sec: 30
+
+steps:
+  - id: create_dump
+    run: |
+      #!/bin/sh
+      set -eu
+      timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+      file="$DAG_RUN_WORK_DIR/${params.database}-${timestamp}.sql.gz"
+      key="${params.prefix}/${params.database}-${timestamp}.sql.gz"
+      MYSQL_PWD="$MYSQL_PASSWORD" mysqldump \
+        --single-transaction \
+        --host="${params.host}" \
+        --port="${params.port}" \
+        --user="${params.user}" \
+        "${params.database}" | gzip > "$file"
+      printf 'file=%s\nkey=%s\n' "$file" "$key" >> "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: file
+      - name: key
+
+  - id: upload
+    depends: [create_dump]
+    action: s3.upload
+    with:
+      bucket: ${params.bucket}
+      key: ${steps.create_dump.outputs.key}
+      source: ${steps.create_dump.outputs.file}
+      content_type: application/gzip

@@ -1,0 +1,11 @@
+{
+  "id": "dbt-scheduled-run",
+  "title": "Schedule a dbt build with artifacts",
+  "summary": "Run a pinned dbt adapter on a schedule and keep dbt target and log files as Dagu run artifacts.",
+  "category": "data-movement",
+  "tags": ["dbt", "postgresql", "data", "schedule"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["A dbt project and profiles directory available to the Dagu worker", "Warehouse credentials supplied through the dbt profile environment"]
+}

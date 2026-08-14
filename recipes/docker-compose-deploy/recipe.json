@@ -1,0 +1,11 @@
+{
+  "id": "docker-compose-deploy",
+  "title": "Deploy Docker Compose with approval",
+  "summary": "Require operator acknowledgement, pull pinned Compose images, start the stack, and record its status.",
+  "category": "deployment",
+  "tags": ["docker", "compose", "deployment", "human-in-the-loop"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["Docker Engine with Compose v2", "A reviewed Compose project with pinned image versions"]
+}

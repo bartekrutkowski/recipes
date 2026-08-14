@@ -1,0 +1,35 @@
+description: Notify Slack when a filesystem reaches its utilization threshold.
+schedule: "*/15 * * * *"
+
+params:
+  - name: path
+    default: /
+  - name: threshold_percent
+    type: integer
+    default: 85
+    minimum: 1
+    maximum: 100
+
+secrets:
+  - name: SLACK_WEBHOOK_URL
+    provider: env
+    key: SLACK_WEBHOOK_URL
+
+handler_on:
+  failure:
+    action: http.request
+    with:
+      method: POST
+      url: ${env.SLACK_WEBHOOK_URL}
+      headers:
+        Content-Type: application/json
+      body: '{"text":"Disk usage for ${params.path} reached the ${params.threshold_percent}% alert threshold on the Dagu host."}'
+
+steps:
+  - id: check_usage
+    run: |
+      #!/bin/sh
+      set -eu
+      usage="$(df -P "${params.path}" | awk 'NR == 2 { gsub(/%/, "", $5); print $5 }')"
+      printf 'Disk usage for %s: %s%%\n' "${params.path}" "$usage"
+      test "$usage" -lt "${params.threshold_percent}"

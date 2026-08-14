@@ -1,0 +1,52 @@
+description: Create a PostgreSQL custom-format dump and upload it to S3.
+schedule: "0 2 * * *"
+
+params:
+  - name: database_name
+    default: app
+    description: Safe name used in the backup filename
+  - name: bucket
+    required: true
+    description: Destination S3 bucket
+  - name: prefix
+    default: postgres
+    description: Object key prefix
+
+secrets:
+  - name: DATABASE_URL
+    provider: env
+    key: DATABASE_URL
+  - name: AWS_ACCESS_KEY_ID
+    provider: env
+    key: AWS_ACCESS_KEY_ID
+  - name: AWS_SECRET_ACCESS_KEY
+    provider: env
+    key: AWS_SECRET_ACCESS_KEY
+
+defaults:
+  retry_policy:
+    limit: 2
+    interval_sec: 30
+
+steps:
+  - id: create_dump
+    run: |
+      #!/bin/sh
+      set -eu
+      timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+      file="$DAG_RUN_WORK_DIR/${params.database_name}-${timestamp}.dump"
+      key="${params.prefix}/${params.database_name}-${timestamp}.dump"
+      pg_dump --format=custom --file="$file" "$DATABASE_URL"
+      printf 'file=%s\nkey=%s\n' "$file" "$key" >> "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: file
+      - name: key
+
+  - id: upload
+    depends: [create_dump]
+    action: s3.upload
+    with:
+      bucket: ${params.bucket}
+      key: ${steps.create_dump.outputs.key}
+      source: ${steps.create_dump.outputs.file}
+      content_type: application/octet-stream

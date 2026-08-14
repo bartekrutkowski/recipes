@@ -1,0 +1,9 @@
+{
+  "name": "dagu-recipes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "catalog": "node scripts/build-catalog.mjs",
+    "check": "node scripts/build-catalog.mjs --check && node --test tests/*.test.mjs"
+  }
+}

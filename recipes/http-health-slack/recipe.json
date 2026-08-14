@@ -1,0 +1,11 @@
+{
+  "id": "http-health-slack",
+  "title": "Monitor an HTTP endpoint and alert Slack",
+  "summary": "Check an HTTP endpoint on a schedule with retries and send a Slack webhook when the check fails.",
+  "category": "monitoring-alerting",
+  "tags": ["http", "health-check", "slack", "monitoring"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["A reachable HTTP endpoint", "A Slack incoming webhook URL exposed through an environment-backed Dagu secret"]
+}

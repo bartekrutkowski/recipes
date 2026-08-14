@@ -1,0 +1,11 @@
+{
+  "id": "mysql-backup-s3",
+  "title": "Back up MySQL to S3",
+  "summary": "Create a compressed, transaction-consistent MySQL dump and upload it to an S3-compatible bucket.",
+  "category": "backup-recovery",
+  "tags": ["mysql", "s3", "backup", "cron"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos"],
+  "prerequisites": ["mysqldump and gzip", "An S3-compatible bucket", "MySQL and S3 credentials exposed through environment-backed Dagu secrets"]
+}

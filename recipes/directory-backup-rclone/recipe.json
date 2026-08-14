@@ -1,0 +1,11 @@
+{
+  "id": "directory-backup-rclone",
+  "title": "Back up a directory with rclone",
+  "summary": "Copy a local directory to any rclone remote without deleting files at the destination.",
+  "category": "backup-recovery",
+  "tags": ["rclone", "backup", "filesystem", "object-storage"],
+  "author": "dagucloud",
+  "minDaguVersion": "2.13.0",
+  "platforms": ["linux", "macos", "windows"],
+  "prerequisites": ["An rclone remote configured for the Dagu user", "Read access to the source directory"]
+}

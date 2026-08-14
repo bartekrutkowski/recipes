@@ -1,0 +1,21 @@
+description: Run a version-pinned container as a Kubernetes Job on a Dagu schedule.
+schedule: "0 * * * *"
+
+params:
+  - name: namespace
+    default: batch
+  - name: image
+    default: alpine:3.22.1
+  - name: command
+    default: echo 'replace this command with the batch job'
+
+steps:
+  - id: run_job
+    action: kubernetes.run
+    with:
+      namespace: ${params.namespace}
+      image: ${params.image}
+      image_pull_policy: IfNotPresent
+      command: ${params.command}
+      cleanup_policy: delete
+    timeout_sec: 1800

@@ -1,0 +1,55 @@
+description: Apply an approved patch command to a newline-separated list of hosts.
+
+params:
+  - name: hosts
+    default: |
+      server1.example.com
+      server2.example.com
+  - name: user
+    default: deploy
+  - name: key
+    default: ~/.ssh/id_ed25519
+  - name: command
+    default: sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+steps:
+  - id: confirm
+    action: human.task
+    with:
+      prompt: Review the host list and acknowledge the fleet patch operation
+
+  - id: patch_hosts
+    depends: [confirm]
+    action: dag.run
+    parallel:
+      items: ${params.hosts}
+      max_concurrent: 2
+    with:
+      dag: patch-host
+      params:
+        host: ${ITEM}
+        user: ${params.user}
+        key: ${params.key}
+        command: ${params.command}
+---
+name: patch-host
+
+params:
+  - name: host
+    required: true
+  - name: user
+    required: true
+  - name: key
+    required: true
+  - name: command
+    required: true
+
+steps:
+  - id: patch
+    action: ssh.run
+    with:
+      host: ${params.host}
+      user: ${params.user}
+      key: ${params.key}
+      shell: /bin/sh -e
+      command: ${params.command}
