@@ -2,7 +2,7 @@
 
 Runs a command on a schedule and reports each run to a [Watchgoose](https://watchgoose.com) check. Watchgoose alerts you when a run fails, and also when a run never starts, for example because the Dagu host is down.
 
-The workflow sends three pings:
+Each run sends two pings, `/start` and then either a success ping or `/fail`:
 
 - `/start` before the command runs, so Watchgoose can measure run time.
 - A success ping when the run succeeds.
@@ -20,7 +20,7 @@ Set `WATCHGOOSE_CHECK` in the Dagu process environment to the part of the check'
 - `<uuid>` for a UUID ping URL.
 - `<ping-key>/<slug>` for a slug ping URL.
 
-The workflow reads it as a Dagu secret, so it is masked in logs. Set the `command` param to the job to run, and change `schedule` to match the check.
+The workflow reads it as a Dagu secret, so it is masked in logs. Set the default of the `command` param to the job to run (scheduled runs use the default), and change `schedule` to match the check.
 
 ## What it changes
 

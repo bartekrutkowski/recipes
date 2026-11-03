@@ -3,8 +3,8 @@ schedule: "0 3 * * *"
 
 params:
   - name: command
-    required: true
-    description: Command to run, e.g. /usr/local/bin/backup.sh
+    default: /usr/local/bin/backup.sh
+    description: Command to run. Scheduled runs use this default, so set it to your job.
 
 # Report every failed run right away. With DAG-level retries (the base.yaml
 # default), the failure handler and its fail ping wait for the last retry.
